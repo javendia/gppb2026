@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "NB_PAR_PARTITIONER"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "7791b4b3-fa0e-9b7d-47fb-266db5028fa6"
+  }
+}

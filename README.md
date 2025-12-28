@@ -67,8 +67,8 @@ cd gppb2026
     5. Selecciona la rama deseada (por ejemplo, **main**) y la carpeta raíz **src**
     6. Pulsa el botón **Conectar y sincronizar**
 
-    > [!IMPORTANT]
-    > Fabric descargará todos los artefactos automáticamente
+> [!IMPORTANT]
+> Fabric descargará todos los artefactos automáticamente
 
 ## 📚 Recursos y documentación
 

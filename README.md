@@ -37,6 +37,8 @@ gppb2026/
 | [**NB_PAR_PARTITIONER.Notebook**](./src/NB_PAR_PARTITIONER.Notebook/README.md) | Genera particiones dinámicamente en función de criterios de fecha personalizables |
 | [**NB_PAR_REFRESHER.Notebook**](./src/NB_PAR_REFRESHER.Notebook/README.md) | Ejecuta el refresco del conjunto de datos para un grupo de tablas / particiones especificadas |
 
+Para más detalles sobre cada cuaderno, pulsa en los enlaces correspondientes arriba.
+
 ## 🗹 Prerrequisitos
 
 - ✅ Una **capacidad de Microsoft Fabric** en el inquilino de Azure

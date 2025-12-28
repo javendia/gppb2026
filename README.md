@@ -33,9 +33,9 @@ gppb2026/
 | Elemento | Descripción |
 |----------|-------------|
 | **fabtoolkit-1.0.0-py3-none-any.whl** | Librería personalizada con funciones reutilizables para Microsoft Fabric |
-| [**NB_PAR_ORCHESTRATOR.Notebook**](./src/NB_PAR_ORCHESTRATOR.Notebook/README.md) | Cuaderno principal que controla el flujo completo: orquesta el particionado y el refresco del conjunto de datos |
-| [**NB_PAR_PARTITIONER.Notebook**](./src/NB_PAR_PARTITIONER.Notebook/README.md) | Genera particiones dinámicamente en función de criterios de fecha personalizables |
-| [**NB_PAR_REFRESHER.Notebook**](./src/NB_PAR_REFRESHER.Notebook/README.md) | Ejecuta el refresco del conjunto de datos para un grupo de tablas / particiones especificadas |
+| [**NB_PAR_ORCHESTRATOR.Notebook**](./src/PARTITIONS/NB_PAR_ORCHESTRATOR.Notebook/README.md) | Cuaderno principal que controla el flujo completo: orquesta el particionado y el refresco del conjunto de datos |
+| [**NB_PAR_PARTITIONER.Notebook**](./src/PARTITIONS/NB_PAR_PARTITIONER.Notebook/README.md) | Genera particiones dinámicamente en función de criterios de fecha personalizables |
+| [**NB_PAR_REFRESHER.Notebook**](./src/PARTITIONS/NB_PAR_REFRESHER.Notebook/README.md) | Ejecuta el refresco del conjunto de datos para un grupo de tablas / particiones especificadas |
 
 Para más detalles sobre cada cuaderno, pulsa en los enlaces correspondientes arriba.
 

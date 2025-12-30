@@ -69,6 +69,13 @@ cd gppb2026
     5. Selecciona la rama deseada (por ejemplo, **main**) y la carpeta raíz **src**
     6. Pulsa el botón **Conectar y sincronizar**
 
+3. En el área de trabajo de Fabric, abre el cuaderno **NB_PAR_ORCHESTRATOR**
+4. Importa la librería personalizada **fabtoolkit-1.0.0-py3-none-any.whl** entre los recursos integrados del cuaderno:
+
+<p align="center">
+    <img src="./resources/img/install-wheel.png" alt="Importar librería personalizada" style="max-width: 800px; width: 100%; height: auto; border-radius: 8px;">
+</p>
+
 > [!IMPORTANT]
 > Fabric descargará todos los artefactos automáticamente
 

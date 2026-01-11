@@ -33,7 +33,7 @@ import logging
 import sys
 from typing import List, Optional
 from fabtoolkit.utils import is_valid_text, validate_json, dataframe_to_str
-from fabtoolkit.log import ConsoleFormatter
+from fabtoolkit.log import ConsoleLogFormatter
 from fabtoolkit.dataset import Dataset
 
 # METADATA ********************
@@ -64,7 +64,7 @@ logger.propagate = False
 
 if not logger.handlers:
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(ConsoleFormatter())
+    console_handler.setFormatter(ConsoleLogFormatter())
     console_handler.setLevel(DEFAULT_LOG_LEVEL)
     logger.addHandler(console_handler)
 

@@ -36,6 +36,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Optional, Any, Dict
 import logging
+import subprocess
 import sys
 import notebookutils
 
@@ -64,7 +65,8 @@ DEFAULT_NOTEBOOK_TIMEOUT = 3600
 
 # CELL ********************
 
-get_ipython().run_line_magic("pip", f"install /synfs/nb_resource/builtin/fabtoolkit-{FABTTOOLKIT_VERSION}-py3-none-any.whl")
+wheel_path = f"builtin/fabtoolkit-{FABTTOOLKIT_VERSION}-py3-none-any.whl"
+%pip install {wheel_path}
 
 # METADATA ********************
 
@@ -83,7 +85,7 @@ from fabtoolkit.utils import (
     dataframe_to_str,
     Constants
 )
-from fabtoolkit.log import ConsoleFormatter
+from fabtoolkit.log import ConsoleLogFormatter
 from fabtoolkit.dataset import Dataset
 
 # METADATA ********************
@@ -101,7 +103,7 @@ logger.propagate = False
 
 if not logger.handlers:
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(ConsoleFormatter())
+    console_handler.setFormatter(ConsoleLogFormatter())
     console_handler.setLevel(DEFAULT_LOG_LEVEL)
     logger.addHandler(console_handler)
 

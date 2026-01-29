@@ -17,12 +17,10 @@ El cuaderno **NB_PAR_ORCHESTRATOR** es el orquestador principal del flujo de tra
 | `workspace_id` | string | GUID del área de trabajo de Microsoft Fabric | `"dc1b17ac-1d39-4be3-a848-45c8a55c05f1"` |
 | `dataset_id` | string | GUID del modelo semántico de Power BI | `"0e4e85ca-f446-44b6-bf18-2a9114668242"` |
 
-### Parámetros de particionamiento
-
+### Parámetros globales
 | Parámetro | Tipo | Descripción | Ejemplo |
 |-----------|------|-------------|---------|
-| `enable_partition` | boolean | Habilita/deshabilita la creación de particiones | `True` / `False` |
-| `partitions_config` | string (JSON) | Configuración de las particiones a crear | Ver tabla abajo |
+| `partitions_config` | string (JSON) | Configuración para la creación y el refresco de particiones | Ver tabla abajo |
 
 **Ejemplo de `partitions_config`:**
 ```json
@@ -31,7 +29,9 @@ El cuaderno **NB_PAR_ORCHESTRATOR** es el orquestador principal del flujo de tra
     "table": "Sales",
     "first_date": "20200101",
     "partition_by": "Order Date",
-    "interval": "QUARTER"
+    "interval": "QUARTER",
+    "refresh_from": "20250101",
+    "number_of_intervals": "*"
   }
 ]
 ```
@@ -41,7 +41,15 @@ El cuaderno **NB_PAR_ORCHESTRATOR** es el orquestador principal del flujo de tra
 | `table` | string | Nombre de la entidad del modelo semántico a particionar | `"Sales"` |
 | `first_date` | string | Fecha inicial de particionamiento (formato YYYYMMDD) | `"20200101"` |
 | `partition_by` | string | Nombre de la columna de fecha para particionar | `"Order Date"` |
-| `interval` | string | Intervalo de particionamiento | `MONTH`, `QUARTER`, `YEAR` |
+| `interval` | string | Intervalo de particionamiento | `"MONTH"`, `"QUARTER"`, `"YEAR"` |
+| `refresh_from` | string | Fecha desde la cual refrescar hacia atrás (YYYYMMDD). Si el valor es `"TODAY"`, se usa la fecha actual | `"20250101"` |
+| `number_of_intervals` | string | Cuántos períodos incluir. Si el valor es *, refresca todos los períodos disponibles | `"4"` |
+
+### Parámetros de particionamiento
+
+| Parámetro | Tipo | Descripción | Ejemplo |
+|-----------|------|-------------|---------|
+| `enable_partition` | boolean | Habilita/deshabilita la creación de particiones | `True` / `False` |
 
 ### Parámetros de refresco
 
@@ -50,7 +58,6 @@ El cuaderno **NB_PAR_ORCHESTRATOR** es el orquestador principal del flujo de tra
 | `enable_refresh` | boolean | Habilita/deshabilita el refresco del modelo semántico | `True` / `False` |
 | `tables_to_refresh` | string | Tablas a refrescar (separadas por comas) | `"Customer,Sales"` |
 | `partitions_to_refresh` | string (JSON) | Particiones específicas a refrescar | Ver tabla abajo |
-| `refresh_config` | string (JSON) | Configuración para generar la lista de artefactos a refrescar | Ver tabla abajo |
 
 **Ejemplo de `partitions_to_refresh`:**
 ```json
@@ -62,33 +69,13 @@ El cuaderno **NB_PAR_ORCHESTRATOR** es el orquestador principal del flujo de tra
 ]
 ```
 
-**Ejemplo de `refresh_config`:**
-```json
-[
-  {
-    "table": "Sales",
-    "first_date": "20200101",
-    "interval": "QUARTER",
-    "refresh_interval": "YEAR",
-    "number_of_intervals": 6
-  }
-]
-```
-
-| Parámetro | Tipo | Descripción | Ejemplo |
-|-----------|------|-------------|---------|
-| `table` | string | Nombre de la tabla | `"Sales"` |
-| `first_date` | string | Primera fecha de datos (YYYYMMDD) | `"20200101"` |
-| `interval` | string | Intervalo original de particionamiento | `"QUARTER"` |
-| `refresh_interval` | string | Período a refrescar hacia atrás | `"YEAR"` |
-| `number_of_intervals` | integer | Cuántos períodos incluir | `6` |
-
 ### Parámetros de ejecución
 
 | Parámetro | Tipo | Descripción | Valores |
 |-----------|------|-------------|---------|
-| `commit_mode` | string | Confirmación de transacciones | `"transactional"` (predeterminado) o `"partialBatch"` |
-| `max_parallelism` | integer | Número máximo de entidades a refrescar en paralelo | (recomendado: `4-6`) |
+| `refresh_commit_mode` | string | Confirmación de transacciones | `"transactional"` (predeterminado) o `"partialBatch"` |
+| `refresh_max_parallelism` | integer | Número máximo de entidades a refrescar en paralelo | (recomendado: `4-6`) |
+| `notebook_timeout` | integer | Tiempo máximo de ejecución del cuaderno en segundos | (recomendado: `7200`) |
 
 ---
 
@@ -96,49 +83,36 @@ El cuaderno **NB_PAR_ORCHESTRATOR** es el orquestador principal del flujo de tra
 
 ```mermaid
 flowchart TD
-    A["🟢 INICIO<br/>Validación de parámetros"] --> B{¿enable_partition<br/>activo?}
-    
-    B -->|Sí| C["📌 Particionar modelo semántico<br/>run_notebook:NB_PAR_PARTITIONER<br/>Crea particiones según el intervalo establecido"]
-    B -->|No| D["⏭️ Particionar deshabilitado"]
-    
-    C --> E{Particionamiento<br/>con éxito?}
-    D --> F{¿enable_refresh<br/>activo?}
-    E -->|No| X["❌ Error crítico<br/>Abortar ejecución"]
-    E -->|Sí| F
-    
-    F -->|No| Z["✅ FIN<br/>Refresco deshabilitado"]
-    
-    F -->|Sí| G{¿Se ha proporcionado<br/>partitions_to_refresh?}
-    
-    G -->|Sí| H["📋 Usar lista explícita<br/>partitions_to_refresh"]
-    G -->|No| I{¿refresh_config<br/>disponible?}
-    
-    I -->|Sí| J["⚙️ Validar refresh_config<br/>Extraer parámetros"]
-    I -->|No| K["🔄 Refrescar todas<br/>las particiones"]
-    
-    J --> L["📊 Generar lista de particiones<br/>generate_partitions_list<br/>- Calcular fecha inicio/fin<br/>- Generar intervalos de fechas<br/>- Componer nombres de particiones"]
-    
-    L --> M{¿Generación<br/>con éxito?}
-    M -->|No| X
-    M -->|Sí| H
-    
-    H --> N["🔄 Refrescar modelo semántico<br/>run_notebook:NB_PAR_REFRESHER<br/>Parámetros de refresco"]
-    K --> N
-    
-    N --> O{¿Refresco<br/>con éxito?}
-    O -->|No| X
-    O -->|Sí| Z
-    
-    X --> END["⛔ Fin con error"]
-    Z --> END2["✅ Fin con éxito"]
-    
-    style A fill:#90EE90
-    style Z fill:#87CEEB
-    style END2 fill:#87CEEB
-    style X fill:#FFB6C6
-    style END fill:#FFB6C6
-    style C fill:#FFE4B5
-    style N fill:#FFE4B5
+  A["🟢 INICIO<br/>Validación de parámetros"] --> B{¿enable_partition<br/>activo?}
+  B -->|Sí| C["📌 Ejecutar NB_PAR_PARTITIONER<br/>(Crear particiones)"]
+  B -->|No| D["⏭️ Particionar deshabilitado"]
+  C --> E{¿Particionamiento<br/>con éxito?}
+  C -->|No| X["❌ Error crítico<br/>Abortar ejecución"]
+  C -->|Sí| F{¿enable_refresh<br/>activo?}
+  D --> F
+  F -->|No| Z["✅ FIN<br/>Refresco deshabilitado"]
+  F -->|Sí| G{¿partitions_to_refresh<br/>proporcionado?}
+  G -->|Sí| H["📋 Usar partitions_to_refresh<br/>explícito"]
+  G -->|No| I{¿partitions_config<br/>proporcionado?}
+  I -->|Sí| J["📊 Generar lista de particiones<br/>(generate_partitions_list)"]
+  I -->|No| K["🔄 Refrescar todas<br/>las particiones"]
+  J --> L{¿Generación<br/>con éxito?}
+  L -->|No| X
+  L -->|Sí| H
+  H --> N["🔄 Ejecutar NB_PAR_REFRESHER<br/>(Refrescar modelo)"]
+  K --> N
+  N --> O{¿Refresco<br/>con éxito?}
+  O -->|No| X
+  O -->|Sí| Z
+  X --> END["⛔ Fin con error"]
+  Z --> END2["✅ Fin con éxito"]
+  style A fill:#90EE90
+  style Z fill:#87CEEB
+  style END2 fill:#87CEEB
+  style X fill:#FFB6C6
+  style END fill:#FFB6C6
+  style C fill:#FFE4B5
+  style N fill:#FFE4B5
 ```
 
 ---
@@ -162,11 +136,9 @@ from fabtoolkit.utils import (
     generate_date_ranges,         # Generar intervalos de fechas
     is_valid_text,                # Validar texto no vacío
     validate_json,                # Analizar y validar JSON
-    dataframe_to_str,             # Convertir DataFrame a string JSON
     Constants
 )
-from fabtoolkit.log import ConsoleFormatter    # Formato de logging personalizado
-from fabtoolkit.dataset import Dataset         # Clase para operaciones sobre modelos semánticos
+from fabtoolkit.log import ConsoleFormatter    # Formato de logging personalizadosemánticos
 ```
 
 **Versión de fabtoolkit:** `1.0.0`
@@ -175,9 +147,10 @@ from fabtoolkit.dataset import Dataset         # Clase para operaciones sobre mo
 
 ## 📈 Ejemplo de ejecución
 
-### Configuración mínima (Solo refrescar)
+### Configuración mínima (Refrescar todo)
 ```python
 enable_partition = False
+partitions_config = ''
 enable_refresh = True
 tables_to_refresh = "Sales,Customer"
 partitions_to_refresh = ""  # Refrescar todas
@@ -187,12 +160,10 @@ partitions_to_refresh = ""  # Refrescar todas
 ```python
 enable_partition = True
 partitions_config = '[{"table": "Sales", "first_date": "20200101", "partition_by": "Order Date", "interval": "QUARTER"}]'
-
 enable_refresh = True
-refresh_config = '[{"table": "Sales", "first_date": "20200101", "interval": "QUARTER", "refresh_interval": "YEAR", "number_of_intervals": 6}]'
-
-max_parallelism = 4
-commit_mode = "transactional"
+refresh_max_parallelism = 4
+refresh_commit_mode = "transactional"
+refresh_notebook_timeout = 3600
 ```
 
 ---

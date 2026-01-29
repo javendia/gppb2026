@@ -12,9 +12,9 @@
 
 # PARAMETERS CELL ********************
 
-workspace_id = None
-dataset_id = None
-partitions_config = None
+workspace_id: str = ""
+dataset_id: str = ""
+partitions_config: str = ""
 
 # METADATA ********************
 
@@ -27,12 +27,11 @@ partitions_config = None
 
 import pandas as pd
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 import logging
 import sys
-import json
+from io import StringIO
 from fabtoolkit.utils import (
-    validate_json,
     generate_date_ranges,
     Constants,
     Interval
@@ -81,7 +80,7 @@ if not logger.handlers:
 
 # CELL ********************
 
-def _validate_params(dataset: Dataset, partitions_config: str) -> pd.DataFrame:
+def _validate_partitions_config(dataset: Dataset, partitions_config: str) -> pd.DataFrame:
     """
     Validates partitions configuration parameter.
     
@@ -98,15 +97,13 @@ def _validate_params(dataset: Dataset, partitions_config: str) -> pd.DataFrame:
 
     available_intervals: List[str] = [i.value for i in Interval]
 
-    # Parse and validate configuration JSON
-    columns = ["table", "first_date", "partition_by", "interval"]
-    config_df: pd.DataFrame = validate_json(partitions_config, columns)
-
     # Get available tables and columns from dataset
     available_tables: pd.DataFrame = dataset.tables
 
+    partitions_config_df: pd.DataFrame = pd.read_json(StringIO(partitions_config))
+
     # Find mismatches between configuration and actual dataset schema
-    invalid_entries: pd.DataFrame = config_df.merge(
+    invalid_entries: pd.DataFrame = partitions_config_df.merge(
         available_tables, 
         left_on=["table", "partition_by"], 
         right_on=["table_name", "column_name"], 
@@ -118,24 +115,23 @@ def _validate_params(dataset: Dataset, partitions_config: str) -> pd.DataFrame:
     invalid_entries = invalid_entries[invalid_entries["_merge"] == "left_only"]
     
     if not invalid_entries.empty:
-        error_details: List[Dict] = invalid_entries[["table", "partition_by"]].to_dict(orient="records")
         raise ValueError(
-            f"Invalid partition configuration found:\n{json.dumps(error_details, indent=2)}"
+            f"Invalid partition configuration found:\n{invalid_entries[['table', 'partition_by']].to_json(orient='records')}"
         ) from None
     
-    for first_date, interval in zip(config_df["first_date"], config_df["interval"]):
+    for first_date, interval in zip(partitions_config_df["first_date"], partitions_config_df["interval"]):
         try:
             datetime.strptime(str(first_date), Constants.DATE_FORMAT)
         except ValueError as e:
+            logger.error(f"Invalid date format for first_date '{first_date}': {str(e)}")
             raise ValueError(f"Invalid date format for first_date: {first_date}") from e
-        
         # Check if interval is a valid Interval enum value
         try:
             Interval(interval)
         except ValueError as e:
             raise ValueError(f"Invalid interval: {interval}. Expected: {available_intervals}") from e
     
-    return config_df
+    return partitions_config_df
 
 # METADATA ********************
 
@@ -244,23 +240,18 @@ def partition() -> None:
     current_partitions: pd.DataFrame = dataset.partitions
 
     logger.info("Validating partitions configuration parameter value...")
-    config_df = _validate_params(dataset, partitions_config)
+    config_df = _validate_partitions_config(dataset, partitions_config)
     
     for row in config_df.itertuples():
         try:
-            table = row.table
-            first_date = row.first_date
-            partition_by = row.partition_by
-            interval = row.interval
+            logger.info(f"Creating partitions for '{row.table}' in the '{dataset_name}' dataset within the '{workspace_name}' workspace.")
 
-            logger.info(f"Creating partitions for '{table}' in the '{dataset_name}' dataset within the '{workspace_name}' workspace.")
-
-            new_partitions = generate_partition_ranges(table, first_date, interval).assign(
-                partition_by=partition_by
+            new_partitions = generate_partition_ranges(row.table, row.first_date, row.interval).assign(
+                partition_by=row.partition_by
             )
 
             # Filter partitions of the table being processed
-            table_partitions: pd.DataFrame = current_partitions[current_partitions["table_name"]==table]
+            table_partitions: pd.DataFrame = current_partitions[current_partitions["table_name"]==row.table]
     
             # Extract base query and last step name to be used for all pending partitions
             logger.info(f"Extracting query definition...")
@@ -292,13 +283,13 @@ def partition() -> None:
                 logger.info(f"No pending partitions to create.")
                 
             # Delete default partition if present. Its name equals the table name
-            if table in table_partitions["partition_name"].values:
-                dataset.delete_default_partition(table)
-                logger.info(f"Default partition '{table}' deleted successfully.")
+            if row.table in table_partitions["partition_name"].values:
+                dataset.delete_default_partition(row.table)
+                logger.info(f"Default partition '{row.table}' deleted successfully.")
             else:
-                logger.debug(f"No default partition found.")
+                logger.info(f"No default partition found.")
         except Exception as e:
-            logger.error(f"Failed to create partitions for table '{table}': {str(e)}")
+            logger.error(f"Failed to create partitions for table '{row.table}': {str(e)}")
             raise
 
 # METADATA ********************

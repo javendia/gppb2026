@@ -137,9 +137,7 @@ Conjunto de utilidades personalizadas para facilitar operaciones comunes en Micr
 
 ```python
 from fabtoolkit.utils import (
-    is_valid_text,          # Validar string no vacío
-    validate_json,          # Validar JSON
-    dataframe_to_str        # Convertir DataFrame a string JSON
+    is_valid_text          # Validar string no vacío
 )
 from fabtoolkit.log import ConsoleFormatter    # Formato de logging personalizado
 from fabtoolkit.dataset import Dataset         # Clase para operaciones sobre modelos semánticos

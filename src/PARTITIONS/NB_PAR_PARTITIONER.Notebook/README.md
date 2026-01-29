@@ -117,7 +117,7 @@ flowchart TD
 
 - **pandas**: Manipulación de DataFrames
 - **datetime**: Cálculos de fechas
-- **typing**: Tipos (Dict, List, Optional)
+- **typing**: Tipos (Dict, List)
 - **logging**: Sistema de logging
 - **json**: Manejo de estructuras JSON
 
@@ -127,7 +127,6 @@ Conjunto de utilidades personalizadas para facilitar operaciones comunes en Micr
 
 ```python
 from fabtoolkit.utils import (
-    validate_json,            # Validar JSON
     generate_date_ranges,     # Generar intervalos de fechas
     Constants,                # Constantes globales (DATE_FORMAT, INTERVALS)
     Interval                  # Enum de intervalos válidos

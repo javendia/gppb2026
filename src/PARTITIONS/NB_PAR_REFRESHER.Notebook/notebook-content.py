@@ -12,12 +12,12 @@
 
 # PARAMETERS CELL ********************
 
-workspace_id = None
-dataset_id = None
-tables_to_refresh = ""
-partitions_to_refresh = None
-commit_mode = "transactional"
-max_parallelism = 4
+workspace_id: str = ""
+dataset_id: str = ""
+tables_to_refresh: str = ""
+partitions_to_refresh: str = ""
+commit_mode: str = ""
+max_parallelism: int = 4
 
 # METADATA ********************
 
@@ -32,7 +32,8 @@ import pandas as pd
 import logging
 import sys
 from typing import List, Optional
-from fabtoolkit.utils import is_valid_text, validate_json, dataframe_to_str
+from io import StringIO
+from fabtoolkit.utils import is_valid_text
 from fabtoolkit.log import ConsoleLogFormatter
 from fabtoolkit.dataset import Dataset
 
@@ -47,7 +48,6 @@ from fabtoolkit.dataset import Dataset
 
 # Constants
 DEFAULT_LOG_LEVEL = logging.DEBUG
-CHUNK_SIZE = 20
 
 # METADATA ********************
 
@@ -85,7 +85,7 @@ def get_tables(dataset: Dataset, tables_to_refresh: Optional[str]) -> pd.DataFra
 
     Args:
         dataset (Dataset): Dataset object.
-        tables_to_refresh (str): Comma-separated string of table names to refresh.
+        tables_to_refresh (Optional[str]): Comma-separated string of table names to refresh.
 
     Returns:
         pd.DataFrame: DataFrame containing table names to refresh.
@@ -122,7 +122,7 @@ def get_tables(dataset: Dataset, tables_to_refresh: Optional[str]) -> pd.DataFra
 
 # CELL ********************
 
-def get_partitions(dataset: Dataset, tables: pd.DataFrame, partitions_to_refresh: Optional[str]) -> pd.DataFrame:
+def get_partitions(dataset: Dataset, tables: pd.DataFrame, partitions_to_refresh: str) -> pd.DataFrame:
     """
     Gets the list of partitions to refresh.
     If partitions parameter is provided, parse it, validate, and filter the partitions to refresh.
@@ -148,57 +148,65 @@ def get_partitions(dataset: Dataset, tables: pd.DataFrame, partitions_to_refresh
         how="inner"
     )[["table_name", "partition_name"]]
 
-    # If partitions to refresh are specified, validate and filter
-    if is_valid_text(partitions_to_refresh):
-        selected_partitions: pd.DataFrame = validate_json(partitions_to_refresh, ["table", "selected_partitions"])
-        selected_partitions = (
-            selected_partitions.explode("selected_partitions", ignore_index=True)
-            .rename(columns={"table": "table_name", "selected_partitions": "partition_name"})
-        )
-        invalid_partitions: pd.DataFrame = selected_partitions.merge(
-            available_partitions, 
-            left_on=["table_name", "partition_name"],
-            right_on=["table_name", "partition_name"],
-            how="left",
-            indicator=True
-        ).query("_merge == 'left_only'").drop(columns=["_merge"])
-
-        # If there are invalid tables or partitions, raise an error
-        if not invalid_partitions.empty:
-            raise ValueError(
-                f"Invalid tables/partitions found:\n{dataframe_to_str(invalid_partitions)}"
-            ) from None
-        
-        # Merge current partitions with selected partitions to determine which to refresh
-        table_partitions: pd.DataFrame = available_partitions.merge(
-            selected_partitions,
-            left_on=["table_name"],
+    if not is_valid_text(partitions_to_refresh):
+        logger.info("No explicit partitions to refresh. Refreshing all partitions...")
+        return available_partitions
+    else:
+        # Merge tables to identify tables with selected partitions for refresh
+        selected_tables: pd.DataFrame = pd.read_json(StringIO(partitions_to_refresh)).merge(
+            available_partitions,
+            left_on=["table"],
             right_on=["table_name"],
             how="left",
             indicator=True
         )
 
-        # Partitions to be refreshed not explicitly selected (related tables)
-        table_partitions_no_selected: pd.DataFrame = (
-            table_partitions[table_partitions["_merge"] == "left_only"]
-            .rename(columns={"partition_name_x": "partition_name"})[["table_name", "partition_name"]]
+        # If any of the tables with selected partitions are not available
+        invalid_tables = selected_tables[selected_tables["_merge"] == "left_only"]
+        if not invalid_tables.empty:
+            logger.warning(f"The following tables, for which partitions were selected, are not available: {invalid_tables['table'].tolist()}")
+        
+        # Tables with selected partitions
+        tables_with_selected_part = selected_tables[selected_tables["_merge"] == "both"]
+
+        if tables_with_selected_part.empty:
+            return available_partitions
+
+        # Parse and explode selected partitions
+        selected_partitions: pd.DataFrame = (
+            tables_with_selected_part[["table_name", "selected_partitions"]].drop_duplicates()
+            .assign(partition_name=lambda x: x['selected_partitions'].str.split(','))
+            .explode('partition_name', ignore_index=True)
+            .assign(partition_name=lambda x: x['partition_name'].str.strip())
         )
+    
+        # Merge current partitions with selected partitions to determine which to refresh
+        valid_partitions: pd.DataFrame = selected_partitions[["table_name", "partition_name"]].merge(
+            tables_with_selected_part[["table_name", "partition_name"]],
+            left_on=["table_name", "partition_name"],
+            right_on=["table_name", "partition_name"],
+            how="left",
+            indicator=True
+        )
+
+        # If any of the selected partitions do not match the available partitions for the table
+        invalid_partitions = valid_partitions[valid_partitions["_merge"] == "left_only"]
+        if not invalid_partitions.empty:
+            raise ValueError(f"Invalid partitions found:\n{invalid_partitions[['table_name', 'partition_name']].to_json(orient='records')}")
+
+        # Partitions to be refreshed not explicitly selected (related tables)
+        table_partitions_no_selected: pd.DataFrame = selected_tables[selected_tables["_merge"] == "left_only"]
         # Partitions to be refreshed explicitly selected
         table_partitions_selected: pd.DataFrame = (
-            table_partitions[table_partitions["_merge"] == "both"]
-            .rename(columns={"partition_name_y": "partition_name"})[["table_name", "partition_name"]]
-            .drop_duplicates()
+            valid_partitions[valid_partitions["_merge"] == "both"]
         )
 
         partitions: pd.DataFrame = pd.concat(
-            [table_partitions_no_selected, table_partitions_selected], 
+            [table_partitions_no_selected[["table_name", "partition_name"]], table_partitions_selected[["table_name", "partition_name"]]], 
             ignore_index=True
         )
-        logger.info(f"Partitions to refresh: {dataframe_to_str(partitions)}")
+        logger.info(f"Partitions to refresh: {partitions.to_json(orient='records')}")
         return partitions
-    else:
-        logger.info("No explicit partitions to refresh. Refreshing all partitions...")
-        return available_partitions
 
 # METADATA ********************
 
@@ -235,26 +243,20 @@ def refresh() -> None:
     except Exception as e:
         logger.error(f"Failed to retrieve tables and partitions: {str(e)}")
         raise
-        
+
     try:
-        logger.info(f"Requesting refresh for objects: {dataframe_to_str(partitions)}")
+        logger.info(f"Requesting refresh for objects: {partitions.to_json(orient='records')}")
         
         refresh_request_id: str = dataset.refresh_objects(partitions, commit_mode, max_parallelism)
         if not refresh_request_id:
-            logger.error(f"Refresh request is invalid.")
-            raise ValueError(f"Refresh request is invalid.")
+            raise ValueError("Refresh request is invalid.")
         
         logger.info(f"Refresh request ID: {refresh_request_id}")
         
-        # Check final status
-        if dataset.check_refresh_status(refresh_request_id) == "Completed":
-            logger.info(f"Refresh completed successfully.")
-        else:
-            logger.error("Refresh failed. Check refresh history for more details.")
+        if dataset.check_refresh_status(refresh_request_id) != "Completed":
             raise RuntimeError("Refresh failed. Check refresh history for more details.")
-    except (ValueError, RuntimeError) as e:
-        logger.error(f"Error executing refresh: {str(e)}")
-        raise
+            
+        logger.info("Refresh completed successfully.")
     except Exception as e:
         logger.error(f"Unexpected error during refresh: {str(e)}")
         raise

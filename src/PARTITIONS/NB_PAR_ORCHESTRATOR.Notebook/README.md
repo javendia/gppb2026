@@ -153,7 +153,7 @@ enable_partition = False
 partitions_config = ''
 enable_refresh = True
 tables_to_refresh = "Sales,Customer"
-partitions_to_refresh = ""  # Refrescar todas
+partitions_to_refresh = ""
 ```
 
 ### Configuración avanzada (Particionar + Refresco selectivo)
